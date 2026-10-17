@@ -1,0 +1,44 @@
+# Node
+node_modules/
+*/node_modules/
+dist/
+*/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment & Credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# Storage & Local Databases
+storage/uploads/*
+!storage/uploads/.gitkeep
+data/
+*.sqlite
+*.sqlite3
+*.db
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Coverage / Vitest
+coverage/
+.vitest/
+
+# Logs
+logs/
+*.log

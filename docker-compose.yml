@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sysgalaxy_postgres
+    environment:
+      POSTGRES_USER: sysgalaxy_user
+      POSTGRES_PASSWORD: sysgalaxy_secure_password
+      POSTGRES_DB: sysgalaxy_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sysgalaxy_user -d sysgalaxy_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sysgalaxy_gateway
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOST: 0.0.0.0
+      DATABASE_URL: postgresql://sysgalaxy_user:sysgalaxy_secure_password@postgres:5432/sysgalaxy_db
+      STORAGE_ADAPTER: local
+      STORAGE_LOCAL_DIR: ./storage/uploads
+      CORS_ORIGIN: http://localhost:5173,http://localhost:3000
+    volumes:
+      - uploads_data:/app/storage/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  uploads_data:
