@@ -2,6 +2,8 @@ import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { systemRoutes } from './modules/system/routes.js';
 import { paymentRequestRoutes } from './modules/payment-requests/routes.js';
 import { paymentRoutes } from './modules/payments/routes.js';
@@ -9,6 +11,21 @@ import { settingsRoutes } from './modules/settings/routes.js';
 import { bankFeedRoutes } from './modules/bank-feeds/routes.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { openApiSpecification } from './docs/openapi-spec.js';
+
+const MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+};
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({
@@ -31,7 +48,7 @@ export function buildApp(): FastifyInstance {
 
   // Enable CORS
   app.register(cors, {
-    origin: (origin, cb) => {
+    origin: (_origin, cb) => {
       // Allow all in dev / local test, or check whitelist
       cb(null, true);
     },
@@ -59,6 +76,57 @@ export function buildApp(): FastifyInstance {
   app.register(paymentRoutes);
   app.register(settingsRoutes);
   app.register(bankFeedRoutes);
+
+  // Serve Dashboard Static Assets & SPA Fallback
+  const dashboardDistDir = path.resolve(process.cwd(), 'dashboard', 'dist');
+
+  app.setNotFoundHandler(async (request, reply) => {
+    const reqPath = (request.url || '/').split('?')[0];
+    const isReadMethod = request.method === 'GET' || request.method === 'HEAD';
+
+    // Return JSON 404 for API routes or non-GET/HEAD requests
+    if (!isReadMethod || reqPath.startsWith('/v1/') || reqPath === '/v1') {
+      reply.status(404).send({
+        statusCode: 404,
+        error: 'Not Found',
+        message: `Route ${request.method}:${request.url} not found`,
+        requestId: request.id,
+      });
+      return;
+    }
+
+    if (fs.existsSync(dashboardDistDir)) {
+      const safeRelativePath = path.normalize(reqPath).replace(/^(\.\.(\/|\\|$))+/, '').replace(/^[/\\]+/, '');
+      const candidatePath = path.join(dashboardDistDir, safeRelativePath);
+
+      if (
+        safeRelativePath &&
+        candidatePath.startsWith(dashboardDistDir) &&
+        fs.existsSync(candidatePath) &&
+        fs.statSync(candidatePath).isFile()
+      ) {
+        const ext = path.extname(candidatePath).toLowerCase();
+        const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+        const content = await fs.promises.readFile(candidatePath);
+        reply.header('Content-Type', contentType).status(200).send(request.method === 'HEAD' ? undefined : content);
+        return;
+      }
+
+      const indexHtmlPath = path.join(dashboardDistDir, 'index.html');
+      if (fs.existsSync(indexHtmlPath)) {
+        const html = await fs.promises.readFile(indexHtmlPath);
+        reply.header('Content-Type', 'text/html; charset=utf-8').status(200).send(request.method === 'HEAD' ? undefined : html);
+        return;
+      }
+    }
+
+    reply.status(404).send({
+      statusCode: 404,
+      error: 'Not Found',
+      message: `Route ${request.method}:${request.url} not found`,
+      requestId: request.id,
+    });
+  });
 
   // Global Error Handler
   app.setErrorHandler((error: any, request, reply) => {

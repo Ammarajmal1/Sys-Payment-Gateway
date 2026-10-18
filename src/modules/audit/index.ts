@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 
 export interface AuditLogParams {
   tenantId: string;
-  actorType: 'api_key' | 'user' | 'system';
+  actorType: 'api_key' | 'user' | 'system' | 'anonymous';
   actorId: string;
   action: string;
   entityType: string;

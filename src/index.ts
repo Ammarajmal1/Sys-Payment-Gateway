@@ -5,9 +5,7 @@ import { closeDb } from './db/index.js';
 import { GmailBankAlertPoller } from './modules/bank-feeds/gmail-poller.js';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
-const rawHost = process.env.HOST;
-// Bind to '::' (dual-stack) so Windows resolves localhost (::1) and 127.0.0.1 seamlessly
-const HOST = (!rawHost || rawHost === '0.0.0.0') ? '::' : rawHost;
+const HOST = process.env.HOST || '0.0.0.0';
 
 async function main() {
   console.log('🚀 Initializing SysGalaxy Payment Verification Gateway...');

@@ -1,0 +1,5 @@
+{
+  "name": "SysGalaxy — Payment Verification Gateway",
+  "description": "Enterprise-grade multi-tenant payment verification gateway and compliance operating system for Easypaisa, JazzCash, and 1Link bank transfers.",
+  "requestFramePermissions": []
+}

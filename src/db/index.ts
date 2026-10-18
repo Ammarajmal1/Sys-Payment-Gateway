@@ -37,7 +37,10 @@ export async function getDb(): Promise<Database> {
   if (!isTest) {
     const fs = await import('node:fs');
     const path = await import('node:path');
-    const resolvedDir = path.resolve(process.env.PGLITE_DATA_DIR || './data/pglite');
+    const os = await import('node:os');
+    const resolvedDir = path.resolve(
+      process.env.PGLITE_DATA_DIR || path.join(os.tmpdir(), 'sysgalaxy-pglite')
+    );
     fs.mkdirSync(resolvedDir, { recursive: true });
 
     // Clean up stale WASM postmaster.pid from ungraceful shutdown/reloads

@@ -188,10 +188,19 @@ export default function App() {
 
   // Login Form State
   const [loginUsername, setLoginUsername] = useState('admin');
-  const [loginPassword, setLoginPassword] = useState('');
+  const [loginPassword, setLoginPassword] = useState('SysGalaxy@Pass2026!');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Change Password State (Profile)
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [pwChangeLoading, setPwChangeLoading] = useState(false);
+  const [pwChangeFeedback, setPwChangeFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Data states
   const [requests, setRequests] = useState<PaymentRequestItem[]>([]);
@@ -412,6 +421,69 @@ export default function App() {
     setToken(null);
     setCurrentUser(null);
     setIsAuthenticated(false);
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwChangeFeedback(null);
+
+    if (newPassword.trim().length < 6) {
+      setPwChangeFeedback({
+        type: 'error',
+        message: 'New password must be at least 6 characters long.',
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPwChangeFeedback({
+        type: 'error',
+        message: 'New password and confirm password do not match.',
+      });
+      return;
+    }
+
+    setPwChangeLoading(true);
+    try {
+      const activeAuth = token ? `Bearer ${token}` : `Bearer ${apiKey}`;
+      const res = await fetch('/v1/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: activeAuth,
+        },
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setPwChangeFeedback({
+          type: 'error',
+          message: data.message || 'Failed to update password.',
+        });
+        return;
+      }
+
+      setLoginPassword(newPassword.trim());
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPwChangeFeedback({
+        type: 'success',
+        message: data.message || 'Password updated successfully!',
+      });
+      fetchData();
+    } catch (err: any) {
+      setPwChangeFeedback({
+        type: 'error',
+        message: err.message || 'Network error while updating password.',
+      });
+    } finally {
+      setPwChangeLoading(false);
+    }
   };
 
   // Actions
@@ -757,6 +829,52 @@ export default function App() {
             </button>
           </form>
 
+          <div
+            style={{
+              marginTop: '1rem',
+              padding: '0.75rem 1rem',
+              borderRadius: '8px',
+              background: 'rgba(59, 130, 246, 0.1)',
+              border: '1px solid rgba(59, 130, 246, 0.25)',
+              fontSize: '0.8rem',
+              color: '#cbd5e1',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.5rem',
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 600, color: '#93c5fd', marginBottom: '0.15rem' }}>
+                Default Admin Credentials
+              </div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                User: <strong>admin</strong> &nbsp;|&nbsp; Pass: <strong>SysGalaxy@Pass2026!</strong>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setLoginUsername('admin');
+                setLoginPassword('SysGalaxy@Pass2026!');
+                setLoginError('');
+              }}
+              style={{
+                padding: '0.35rem 0.65rem',
+                borderRadius: '6px',
+                background: 'rgba(59, 130, 246, 0.25)',
+                border: '1px solid rgba(96, 165, 250, 0.4)',
+                color: '#fff',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Auto-Fill
+            </button>
+          </div>
+
           <div className="login-security-features">
             <div className="security-feature-item">
               <ShieldCheck size={14} />
@@ -838,7 +956,7 @@ export default function App() {
             onClick={() => setActiveTab('senders-whitelist')}
           >
             <ShieldCheck size={18} />
-            Senders Whitelist Emails
+            Senders Emails
             {trustedSenders.length > 0 && (
               <span className="nav-badge" style={{ background: 'rgba(99, 102, 241, 0.2)', color: '#a5b4fc' }}>
                 {trustedSenders.length}
@@ -901,16 +1019,61 @@ export default function App() {
             <ShieldAlert size={18} />
             Audit Logs
           </button>
+
+          <button
+            id="nav-profile"
+            className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`}
+            onClick={() => setActiveTab('profile')}
+            style={{ marginTop: 'auto' }}
+          >
+            <User size={18} />
+            Profile
+          </button>
         </nav>
 
         <div className="sidebar-footer">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981' }}></span>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Connected to Gateway API</span>
-          </div>
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-            v1.0.0 • Tailor OS Connected
-          </div>
+          {currentUser && (
+            <div
+              onClick={() => setActiveTab('profile')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '0.5rem',
+                padding: '0.55rem 0.65rem',
+                background: activeTab === 'profile' ? 'rgba(59, 130, 246, 0.18)' : 'rgba(255, 255, 255, 0.04)',
+                border: activeTab === 'profile' ? '1px solid rgba(96, 165, 250, 0.45)' : '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '8px',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', minWidth: 0 }}>
+                <div className="user-avatar-circle">
+                  {currentUser.username.charAt(0).toUpperCase()}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div className="user-badge-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {currentUser.username}
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
+                    {currentUser.role || 'Admin'} Profile
+                  </div>
+                </div>
+              </div>
+              <button
+                id="btn-logout-sidebar"
+                className="btn-logout"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleLogout();
+                }}
+                title="Sign Out of Gateway"
+              >
+                <LogOut size={13} />
+                Sign Out
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -921,14 +1084,16 @@ export default function App() {
             <h1 className="page-heading">
               {activeTab === 'overview' && 'System Overview'}
               {activeTab === 'payment-requests' && 'Payment Requests'}
+              {activeTab === 'pending-reviews' && 'Pending Manual Reviews'}
               {activeTab === 'bank-feeds' && 'Bank Email Feeds'}
-              {activeTab === 'senders-whitelist' && 'Senders Whitelist Emails'}
+              {activeTab === 'senders-whitelist' && 'Senders Emails'}
               {activeTab === 'payment-methods' && 'Payment Method Configuration'}
               {activeTab === 'api-keys' && 'API Keys & Secrets'}
               {activeTab === 'webhooks' && 'Webhook Endpoints'}
               {activeTab === 'delivery-logs' && 'Webhook Delivery History'}
               {activeTab === 'merchant-settings' && 'Merchant Profile & Settings'}
               {activeTab === 'audit-logs' && 'Security Audit Trail'}
+              {activeTab === 'profile' && 'Admin Profile'}
             </h1>
             <span className={`env-pill ${environment}`}>
               {environment === 'test' ? 'Sandbox Mode' : 'Production'}
@@ -936,15 +1101,6 @@ export default function App() {
           </div>
 
           <div className="header-actions">
-            {currentUser && (
-              <div className="user-header-badge">
-                <div className="user-avatar-circle">
-                  {currentUser.username.charAt(0).toUpperCase()}
-                </div>
-                <span className="user-badge-name">{currentUser.username}</span>
-              </div>
-            )}
-
             <button
               id="btn-refresh-data"
               className="btn btn-secondary btn-sm"
@@ -954,37 +1110,10 @@ export default function App() {
               <RefreshCw size={14} className={loading ? 'spin' : ''} />
               Refresh
             </button>
-
-            <button
-              id="btn-new-payment-request"
-              className="btn btn-primary btn-sm"
-              onClick={() => setCreateRequestModal(true)}
-            >
-              <Plus size={16} />
-              New Payment Request
-            </button>
-
-            <button
-              id="btn-logout"
-              className="btn-logout"
-              onClick={handleLogout}
-              title="Sign Out of Gateway"
-            >
-              <LogOut size={14} />
-              Sign Out
-            </button>
           </div>
         </header>
 
         <div className="content-body">
-          {/* Security Alert Notice */}
-          <div className="security-banner">
-            <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
-            <div>
-              <strong>Strict Deterministic Verification Active:</strong> OCR extracted text from customer upload screenshots is classified as untrusted data. Payments without authenticated provider evidence are automatically held in <em>Pending Review</em> for human compliance verification.
-            </div>
-          </div>
-
           {/* 1. OVERVIEW PAGE */}
           {activeTab === 'overview' && (
             <div>
@@ -1266,29 +1395,6 @@ export default function App() {
 
             return (
               <div>
-                {/* Header Actions */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
-                  <div>
-                    <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                      <Mail size={22} style={{ color: '#10b981' }} />
-                      Bank Email Feeds & Automated Reconciliation
-                    </h2>
-                    <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                      Direct real-time alerts received from Meezan Bank, JazzCash, Easypaisa, HBL, and Raast via Google Cloud Pub/Sub Webhooks.
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.6rem' }}>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => fetchData()}
-                      disabled={loading}
-                      title="Refresh feeds from backend database"
-                    >
-                      <RefreshCw size={14} className={loading ? 'spin' : ''} /> Refresh
-                    </button>
-                  </div>
-                </div>
-
                 {/* 2. STATS KPI CARDS */}
                 <div className="stats-grid" style={{ marginBottom: '1.5rem' }}>
                   <div className="stat-card indigo">
@@ -1344,7 +1450,7 @@ export default function App() {
                       Bank Alerts Stream
                     </div>
 
-                    {/* Filter & Search Bar + View Toggle */}
+                    {/* Filter & Search Bar */}
                     <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
                       <div style={{ position: 'relative' }}>
                         <Search size={14} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)' }} />
@@ -1361,21 +1467,6 @@ export default function App() {
                       <select
                         className="form-select"
                         style={{ width: 130, height: 34, fontSize: '0.8rem' }}
-                        value={feedProviderFilter}
-                        onChange={e => setFeedProviderFilter(e.target.value)}
-                      >
-                        <option value="all">All Banks</option>
-                        <option value="meezan_bank">Meezan Bank</option>
-                        <option value="jazzcash">JazzCash</option>
-                        <option value="easypaisa">Easypaisa</option>
-                        <option value="hbl">HBL</option>
-                        <option value="bank_transfer">Bank Transfer</option>
-                        <option value="manual_reconciliation">Manual Entry</option>
-                      </select>
-
-                      <select
-                        className="form-select"
-                        style={{ width: 130, height: 34, fontSize: '0.8rem' }}
                         value={feedStatusFilter}
                         onChange={e => setFeedStatusFilter(e.target.value as any)}
                       >
@@ -1383,26 +1474,6 @@ export default function App() {
                         <option value="verified">Auto-Verified</option>
                         <option value="pending">Awaiting Match</option>
                       </select>
-
-                      {/* View Mode Toggle */}
-                      <div className="view-mode-toggle">
-                        <button
-                          type="button"
-                          className={`view-mode-btn ${feedViewMode === 'cards' ? 'active' : ''}`}
-                          onClick={() => setFeedViewMode('cards')}
-                          title="Cards Grid View"
-                        >
-                          <LayoutGrid size={13} /> Cards
-                        </button>
-                        <button
-                          type="button"
-                          className={`view-mode-btn ${feedViewMode === 'table' ? 'active' : ''}`}
-                          onClick={() => setFeedViewMode('table')}
-                          title="Compact Table View"
-                        >
-                          <List size={13} /> Table
-                        </button>
-                      </div>
                     </div>
                   </div>
 
@@ -2289,6 +2360,213 @@ export default function App() {
                     )}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* 12. PROFILE */}
+          {activeTab === 'profile' && (
+            <div className="card" style={{ maxWidth: '640px' }}>
+              <div className="card-header">
+                <div className="card-title">
+                  <User size={18} style={{ color: '#60a5fa' }} />
+                  User Profile & Session
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '1.25rem',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '10px',
+                  marginBottom: '1.25rem',
+                }}
+              >
+                {currentUser && (
+                  <div className="user-header-badge" style={{ padding: '0.6rem 1rem' }}>
+                    <div className="user-avatar-circle" style={{ width: 36, height: 36, fontSize: '1rem' }}>
+                      {currentUser.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="user-badge-name" style={{ fontSize: '0.95rem' }}>
+                        {currentUser.username}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
+                        {currentUser.name || 'Gateway Administrator'} • {currentUser.role || 'admin'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  id="btn-logout"
+                  className="btn-logout"
+                  onClick={handleLogout}
+                  title="Sign Out of Gateway"
+                  style={{ padding: '0.5rem 0.9rem', fontSize: '0.85rem' }}
+                >
+                  <LogOut size={15} />
+                  Sign Out
+                </button>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Username</label>
+                <input className="form-input" value={currentUser?.username || 'admin'} readOnly />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Role</label>
+                <input className="form-input" value={currentUser?.role || 'admin'} readOnly />
+              </div>
+
+              <div
+                style={{
+                  marginTop: '1.75rem',
+                  paddingTop: '1.5rem',
+                  borderTop: '1px solid var(--border-subtle)',
+                }}
+              >
+                <div className="card-title" style={{ marginBottom: '1rem', fontSize: '1rem' }}>
+                  <Lock size={17} style={{ color: '#60a5fa' }} />
+                  Change Password
+                </div>
+
+                {pwChangeFeedback && (
+                  <div
+                    style={{
+                      marginBottom: '1rem',
+                      padding: '0.75rem 1rem',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.6rem',
+                      fontSize: '0.825rem',
+                      background:
+                        pwChangeFeedback.type === 'success'
+                          ? 'rgba(16, 185, 129, 0.12)'
+                          : 'rgba(239, 68, 68, 0.12)',
+                      border:
+                        pwChangeFeedback.type === 'success'
+                          ? '1px solid rgba(16, 185, 129, 0.35)'
+                          : '1px solid rgba(239, 68, 68, 0.35)',
+                      color: pwChangeFeedback.type === 'success' ? '#6ee7b7' : '#fca5a5',
+                    }}
+                  >
+                    {pwChangeFeedback.type === 'success' ? (
+                      <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+                    ) : (
+                      <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+                    )}
+                    <span>{pwChangeFeedback.message}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleChangePassword}>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="current-password">Current Password</label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        id="current-password"
+                        type={showCurrentPw ? 'text' : 'password'}
+                        className="form-input"
+                        placeholder="Enter current password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        required
+                        style={{ paddingRight: '2.5rem' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPw(!showCurrentPw)}
+                        style={{
+                          position: 'absolute',
+                          right: '0.75rem',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          color: 'var(--text-muted)',
+                          display: 'flex',
+                          alignItems: 'center',
+                        }}
+                        title={showCurrentPw ? 'Hide password' : 'Show password'}
+                      >
+                        {showCurrentPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="new-password">New Password</label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        id="new-password"
+                        type={showNewPw ? 'text' : 'password'}
+                        className="form-input"
+                        placeholder="Minimum 6 characters"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        required
+                        minLength={6}
+                        style={{ paddingRight: '2.5rem' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPw(!showNewPw)}
+                        style={{
+                          position: 'absolute',
+                          right: '0.75rem',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          color: 'var(--text-muted)',
+                          display: 'flex',
+                          alignItems: 'center',
+                        }}
+                        title={showNewPw ? 'Hide password' : 'Show password'}
+                      >
+                        {showNewPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="confirm-password">Confirm New Password</label>
+                    <input
+                      id="confirm-password"
+                      type={showNewPw ? 'text' : 'password'}
+                      className="form-input"
+                      placeholder="Re-enter new password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      minLength={6}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                    <button
+                      id="btn-change-password"
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={pwChangeLoading}
+                    >
+                      {pwChangeLoading ? (
+                        <>
+                          <RefreshCw size={15} className="spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <KeyRound size={15} />
+                          Update Password
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}
