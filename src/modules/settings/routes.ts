@@ -43,18 +43,40 @@ const CreateWebhookEndpointSchema = z.object({
   events: z.array(z.string()).default(['*']),
 });
 
-const CreateConnectedAppSchema = z.object({
-  name: z.string().min(2, 'App name is required'),
-  app_code: z
-    .string()
-    .min(2, 'App code identifier is required')
-    .regex(/^[a-z0-9_-]+$/, 'App code must be lowercase alphanumeric, dashes or underscores'),
-  base_url: z.string().url('A valid Base URL is required'),
-  sync_endpoint: z.string().default('/api/super-admin/receiving-accounts'),
-  api_key: z.string().optional(),
-  description: z.string().optional(),
-  is_active: z.boolean().default(true),
-});
+const CreateConnectedAppSchema = z
+  .object({
+    name: z.string().optional(),
+    app_name: z.string().optional(),
+    app_code: z
+      .string()
+      .min(2, 'App code identifier is required')
+      .regex(/^[a-z0-9_-]+$/, 'App code must be lowercase alphanumeric, dashes or underscores'),
+    base_url: z.string().min(3, 'Base URL is required'),
+    sync_endpoint: z.string().default('/api/super-admin/receiving-accounts'),
+    api_key: z.string().optional(),
+    description: z.string().optional(),
+    is_active: z.boolean().default(true),
+  })
+  .transform(data => {
+    let baseUrl = data.base_url.trim();
+    if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+      baseUrl = 'http://' + baseUrl;
+    }
+    baseUrl = baseUrl.replace(/\/+$/, '');
+
+    const resolvedName = (data.name || data.app_name || '').trim();
+    return {
+      ...data,
+      name: resolvedName,
+      app_name: resolvedName,
+      base_url: baseUrl,
+      sync_endpoint: data.sync_endpoint.startsWith('/') ? data.sync_endpoint : '/' + data.sync_endpoint,
+    };
+  })
+  .refine(data => data.name.length >= 2, {
+    message: 'Application name is required (minimum 2 characters)',
+    path: ['name'],
+  });
 
 export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook('preHandler', authenticateApiKey);
@@ -432,6 +454,7 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
         a.id,
         a.tenant_id,
         a.name,
+        a.name as app_name,
         a.app_code,
         a.base_url,
         a.sync_endpoint,
@@ -441,7 +464,8 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
         a.synced_methods_count,
         a.created_at,
         a.updated_at,
-        COUNT(pm.id)::int as active_methods_count
+        COUNT(pm.id)::int as active_methods_count,
+        COUNT(pm.id)::int as methods_count
       FROM connected_apps a
       LEFT JOIN payment_methods pm ON pm.source_app_code = a.app_code AND pm.tenant_id = a.tenant_id
       WHERE a.tenant_id = ${tenant.id}
@@ -492,7 +516,12 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
       metadata: { description: `Registered connected SaaS application ${d.name} (${d.app_code})` },
     });
 
-    reply.status(201).send(res.rows[0]);
+    const appRow = res.rows[0] as any;
+    reply.status(201).send({
+      ...appRow,
+      app: appRow,
+      app_name: appRow.name,
+    });
   });
 
   fastify.delete('/v1/connected-apps/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {

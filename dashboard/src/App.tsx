@@ -265,6 +265,7 @@ export default function App() {
   const [newAppBaseUrl, setNewAppBaseUrl] = useState('');
   const [newAppSyncEndpoint, setNewAppSyncEndpoint] = useState('/api/super-admin/receiving-accounts');
   const [newAppApiKey, setNewAppApiKey] = useState('');
+  const [isConnectingApp, setIsConnectingApp] = useState<boolean>(false);
 
   // Modals
   const [createRequestModal, setCreateRequestModal] = useState<boolean>(false);
@@ -852,15 +853,20 @@ export default function App() {
   // Connect new SaaS app
   const handleConnectApp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAppName.trim() || !newAppCode.trim() || !newAppBaseUrl.trim()) return;
+    if (!newAppName.trim() || !newAppCode.trim() || !newAppBaseUrl.trim()) {
+      alert('Please fill in Application Name, App Code, and Base URL.');
+      return;
+    }
+    setIsConnectingApp(true);
     try {
       const activeAuth = token ? `Bearer ${token}` : `Bearer ${apiKey}`;
       const res = await fetch('/v1/connected-apps', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: activeAuth },
         body: JSON.stringify({
-          app_code: newAppCode.trim().toLowerCase(),
+          name: newAppName.trim(),
           app_name: newAppName.trim(),
+          app_code: newAppCode.trim().toLowerCase(),
           base_url: newAppBaseUrl.trim(),
           sync_endpoint: newAppSyncEndpoint.trim() || '/api/super-admin/receiving-accounts',
           api_key: newAppApiKey.trim() || undefined,
@@ -868,22 +874,38 @@ export default function App() {
       });
       const data = await res.json();
       if (res.ok) {
+        const appId = data.id || data.app?.id;
+        const appName = data.name || data.app_name || data.app?.name || newAppName;
+
         setConnectAppModal(false);
         setAppFeedback({
           type: 'success',
-          message: `Application "${newAppName}" connected successfully! Now syncing bank accounts...`,
+          message: `Application "${appName}" connected successfully! Syncing bank accounts...`,
         });
         setNewAppName('');
         setNewAppCode('');
         setNewAppBaseUrl('');
         setNewAppApiKey('');
-        // Trigger auto-sync for newly connected app
-        await handleSyncApp(data.app.id, data.app.app_name);
+        await fetchData();
+
+        // Trigger auto-sync for newly connected app if appId exists
+        if (appId) {
+          await handleSyncApp(appId, appName);
+        }
       } else {
-        alert(data.message || 'Failed to connect SaaS application');
+        let errMsg = data.message || data.error;
+        if (data.details?.fieldErrors) {
+          const fields = Object.entries(data.details.fieldErrors)
+            .map(([k, v]: any) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+            .join('\n');
+          if (fields) errMsg = `Validation Error:\n${fields}`;
+        }
+        alert(errMsg || 'Failed to connect SaaS application');
       }
     } catch (err: any) {
       alert(err.message || 'Error connecting SaaS application');
+    } finally {
+      setIsConnectingApp(false);
     }
   };
 
@@ -3569,9 +3591,10 @@ export default function App() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setConnectAppModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <Plus size={16} /> Connect & Sync Accounts
+                <button type="button" className="btn btn-secondary" disabled={isConnectingApp} onClick={() => setConnectAppModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={isConnectingApp} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Plus size={16} className={isConnectingApp ? 'spin' : ''} />
+                  {isConnectingApp ? 'Connecting & Syncing...' : 'Connect & Sync Accounts'}
                 </button>
               </div>
             </form>
