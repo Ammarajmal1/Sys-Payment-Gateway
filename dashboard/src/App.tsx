@@ -1095,9 +1095,6 @@ export default function App() {
               {activeTab === 'audit-logs' && 'Security Audit Trail'}
               {activeTab === 'profile' && 'Admin Profile'}
             </h1>
-            <span className={`env-pill ${environment}`}>
-              {environment === 'test' ? 'Sandbox Mode' : 'Production'}
-            </span>
           </div>
 
           <div className="header-actions">
@@ -1134,12 +1131,6 @@ export default function App() {
                   <div className="kpi-title">Verified Transactions</div>
                   <div className="kpi-value" style={{ color: '#10b981' }}>{verifiedCount}</div>
                   <div className="kpi-subtext">Provider & manual verified count</div>
-                </div>
-
-                <div className="kpi-card">
-                  <div className="kpi-title">Active Payment Methods</div>
-                  <div className="kpi-value">{paymentMethods.filter(m => m.is_active).length} / {paymentMethods.length}</div>
-                  <div className="kpi-subtext">Easypaisa, JazzCash, 1Link Bank</div>
                 </div>
               </div>
 
@@ -1429,17 +1420,6 @@ export default function App() {
                     <div className="stat-value" style={{ color: '#f59e0b' }}>{awaitingFeedsCount}</div>
                     <div className="stat-desc">Bank credits awaiting customer proof slip</div>
                   </div>
-
-                  <div className="stat-card cyan">
-                    <div className="stat-card-header">
-                      <div className="stat-label">Real-Time Ingestion</div>
-                      <div className="stat-card-icon cyan">
-                        <Radio size={18} />
-                      </div>
-                    </div>
-                    <div className="stat-value" style={{ color: '#22d3ee', fontSize: '1.5rem' }}>Pub/Sub Push</div>
-                    <div className="stat-desc">Google Cloud instant notification active</div>
-                  </div>
                 </div>
 
                 {/* 3. FEEDS STREAM (CARDS & TABLE) */}
@@ -1671,26 +1651,6 @@ export default function App() {
           {/* 6. SENDERS WHITELIST EMAILS */}
           {activeTab === 'senders-whitelist' && (
             <div>
-              {/* Header */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
-                <div>
-                  <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                    <ShieldCheck size={22} style={{ color: '#6366f1' }} />
-                    Senders Whitelist Emails
-                  </h2>
-                  <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                    Strict security policy: only bank alert emails originating from these official bank addresses are ingested as trusted payment evidence.
-                  </p>
-                </div>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => fetchData()}
-                  disabled={loading}
-                >
-                  <RefreshCw size={14} className={loading ? 'spin' : ''} /> Refresh Whitelist
-                </button>
-              </div>
-
               {/* KPI Cards */}
               <div className="stats-grid" style={{ marginBottom: '1.5rem' }}>
                 <div className="stat-card indigo">
