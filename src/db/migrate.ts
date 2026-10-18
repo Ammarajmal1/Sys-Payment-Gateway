@@ -387,7 +387,7 @@ export async function seedInitialData(): Promise<{
       ${tenantId},
       'TailorShop Management System (TPMS)',
       'tpms',
-      'http://localhost:5173',
+      'http://localhost:3000',
       '/api/super-admin/receiving-accounts',
       'Primary connected tailoring and order management SaaS product',
       TRUE

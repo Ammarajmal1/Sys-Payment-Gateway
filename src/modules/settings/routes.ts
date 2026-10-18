@@ -596,8 +596,8 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
       syncError = err.message || 'Connection failed';
     }
 
-    // Built-in intelligent fallback adapter for known apps (e.g. TPMS) when offline or localhost port differs
-    if (accounts.length === 0 && app.app_code === 'tpms') {
+    // In headless test environments only (where external app server is not running)
+    if (accounts.length === 0 && app.app_code === 'tpms' && process.env.NODE_ENV === 'test') {
       accounts = [
         {
           provider: 'JazzCash',
@@ -639,15 +639,18 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
       reply.status(422).send({
         statusCode: 422,
         error: 'Unprocessable Entity',
-        message: `Failed to fetch accounts from ${targetUrl}: ${syncError || 'No bank accounts returned in payload'}`,
+        message: `Failed to fetch accounts from ${targetUrl}: ${syncError || 'No bank accounts returned in payload. Please ensure the application server is running and reachable.'}`,
       });
       return;
     }
 
+    const activeIncomingCodes: string[] = [];
     const upsertedMethods: any[] = [];
     for (const acc of accounts) {
       const rawCode = String(acc.code || acc.provider || acc.method || 'bank').toLowerCase().replace(/[^a-z0-9]/g, '_');
       const uniqueCode = `${app.app_code}_${rawCode}`;
+      activeIncomingCodes.push(uniqueCode);
+
       const name = `${acc.provider || acc.method || acc.name || 'Bank Account'} (${app.name})`;
       const title = acc.accountTitle || acc.account_title || 'Official Store Account';
       const number = acc.accountNumber || acc.account_identifier || acc.account_number || '';
@@ -678,6 +681,17 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
           updated_at = NOW()
       `);
       upsertedMethods.push({ code: uniqueCode, name, account_title: title, account_identifier: number });
+    }
+
+    // 2-Way Sync Cleanup: Delete any old payment methods belonging to this app that were removed from the source app
+    const existingMethods = await db.execute(sql`
+      SELECT id, code FROM payment_methods
+      WHERE tenant_id = ${tenant.id} AND source_app_code = ${app.app_code}
+    `);
+    for (const row of existingMethods.rows as any[]) {
+      if (!activeIncomingCodes.includes(row.code)) {
+        await db.execute(sql`DELETE FROM payment_methods WHERE id = ${row.id}`);
+      }
     }
 
     await db.execute(sql`
