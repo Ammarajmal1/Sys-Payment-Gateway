@@ -40,7 +40,14 @@ import {
   CheckCheck,
   Send,
   LayoutGrid,
-  List
+  List,
+  Server,
+  Layers,
+  Globe,
+  Link2,
+  Unlink,
+  Download,
+  CheckCircle
 } from 'lucide-react';
 
 // Types
@@ -118,6 +125,23 @@ export interface PaymentMethodItem {
   is_active: boolean;
   min_amount_paisa: number;
   max_amount_paisa: number;
+  source_app_code?: string | null;
+  source_app_id?: string | null;
+}
+
+export interface ConnectedAppItem {
+  id: string;
+  app_code: string;
+  app_name: string;
+  base_url: string;
+  sync_endpoint: string;
+  api_key?: string | null;
+  is_active: boolean;
+  last_synced_at: string | null;
+  sync_status: 'never_synced' | 'synced' | 'failed';
+  sync_error: string | null;
+  methods_count: number;
+  created_at: string;
 }
 
 export interface ApiKeyItem {
@@ -227,6 +251,21 @@ export default function App() {
   const [feedStatusFilter, setFeedStatusFilter] = useState<'all' | 'verified' | 'pending'>('all');
   const [feedViewMode, setFeedViewMode] = useState<'cards' | 'table'>('cards');
 
+  // Connected SaaS Apps & Multi-App Sync State
+  const [connectedApps, setConnectedApps] = useState<ConnectedAppItem[]>([]);
+  const [syncingAppId, setSyncingAppId] = useState<string | null>(null);
+  const [syncAllAppsLoading, setSyncAllAppsLoading] = useState<boolean>(false);
+  const [appFilter, setAppFilter] = useState<string>('all');
+  const [connectAppModal, setConnectAppModal] = useState<boolean>(false);
+  const [appFeedback, setAppFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+
+  // New Connected App Form
+  const [newAppName, setNewAppName] = useState('');
+  const [newAppCode, setNewAppCode] = useState('');
+  const [newAppBaseUrl, setNewAppBaseUrl] = useState('');
+  const [newAppSyncEndpoint, setNewAppSyncEndpoint] = useState('/api/super-admin/receiving-accounts');
+  const [newAppApiKey, setNewAppApiKey] = useState('');
+
   // Modals
   const [createRequestModal, setCreateRequestModal] = useState<boolean>(false);
   const [reviewApproveModal, setReviewApproveModal] = useState<PaymentItem | null>(null);
@@ -288,7 +327,7 @@ export default function App() {
       const activeAuth = token ? `Bearer ${token}` : `Bearer ${apiKey}`;
       const headers = { Authorization: activeAuth };
 
-      const [reqRes, payRes, methRes, keyRes, hookRes, delivRes, audRes, sendRes, feedRes, gmailRes] = await Promise.all([
+      const [reqRes, payRes, methRes, keyRes, hookRes, delivRes, audRes, sendRes, feedRes, gmailRes, appsRes] = await Promise.all([
         fetch('/v1/payment-requests', { headers }).then(r => r.ok ? r.json() : { items: [] }),
         fetch('/v1/payments', { headers }).then(r => r.ok ? r.json() : { items: [] }),
         fetch('/v1/payment-methods', { headers }).then(r => r.ok ? r.json() : { items: [] }),
@@ -299,6 +338,7 @@ export default function App() {
         fetch('/v1/bank-feeds/trusted-senders', { headers }).then(r => r.ok ? r.json() : { items: [] }),
         fetch('/v1/bank-feeds', { headers }).then(r => r.ok ? r.json() : { items: [] }),
         fetch('/v1/bank-feeds/gmail/status', { headers }).then(r => r.ok ? r.json() : null),
+        fetch('/v1/connected-apps', { headers }).then(r => r.ok ? r.json() : { items: [] }),
       ]);
 
       setRequests(reqRes.items || []);
@@ -311,6 +351,7 @@ export default function App() {
       setTrustedSenders(sendRes.items || []);
       setBankFeeds(feedRes.items || []);
       if (gmailRes) setGmailStatus(gmailRes);
+      setConnectedApps(appsRes.items || []);
     } catch (err) {
       console.warn('Backend API offline or initial load, fallback to demo state:', err);
     } finally {
@@ -726,9 +767,10 @@ export default function App() {
   const handleDeleteSender = async (id: string) => {
     if (!confirm('Remove this email address from trusted bank senders list?')) return;
     try {
+      const activeAuth = token ? `Bearer ${token}` : `Bearer ${apiKey}`;
       const res = await fetch(`/v1/bank-feeds/trusted-senders/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${apiKey}` },
+        headers: { Authorization: activeAuth },
       });
       if (res.ok) {
         fetchData();
@@ -737,6 +779,146 @@ export default function App() {
       alert(err.message);
     }
   };
+
+  // Quick fill preset for TPMS
+  const handleQuickFillTPMS = () => {
+    setNewAppName('TailorShop Management System (TPMS)');
+    setNewAppCode('tpms');
+    setNewAppBaseUrl('http://localhost:3000');
+    setNewAppSyncEndpoint('/api/super-admin/receiving-accounts');
+    setNewAppApiKey('');
+  };
+
+  // Sync a single connected app's bank details
+  const handleSyncApp = async (appId: string, appName: string) => {
+    setSyncingAppId(appId);
+    setAppFeedback({ type: 'info', message: `Fetching and syncing receiving bank accounts from ${appName}...` });
+    try {
+      const activeAuth = token ? `Bearer ${token}` : `Bearer ${apiKey}`;
+      const res = await fetch(`/v1/connected-apps/${appId}/sync`, {
+        method: 'POST',
+        headers: { Authorization: activeAuth },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAppFeedback({
+          type: 'success',
+          message: `Successfully synced ${data.methods_synced || 0} receiving accounts from ${appName}!`,
+        });
+        await fetchData();
+      } else {
+        setAppFeedback({
+          type: 'error',
+          message: data.message || `Failed to sync accounts from ${appName}`,
+        });
+      }
+    } catch (err: any) {
+      setAppFeedback({ type: 'error', message: err.message || 'Network error syncing app accounts' });
+    } finally {
+      setSyncingAppId(null);
+    }
+  };
+
+  // Sync all active apps at once
+  const handleSyncAllApps = async () => {
+    setSyncAllAppsLoading(true);
+    setAppFeedback({ type: 'info', message: 'Syncing receiving accounts from all connected SaaS applications...' });
+    try {
+      const activeAuth = token ? `Bearer ${token}` : `Bearer ${apiKey}`;
+      const res = await fetch('/v1/connected-apps/sync-all', {
+        method: 'POST',
+        headers: { Authorization: activeAuth },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAppFeedback({
+          type: 'success',
+          message: `Multi-App Sync Complete: Synced ${data.total_synced || 0} accounts across ${data.synced_apps || 0} active SaaS applications!`,
+        });
+        await fetchData();
+      } else {
+        setAppFeedback({
+          type: 'error',
+          message: data.message || 'Failed to sync accounts from SaaS apps',
+        });
+      }
+    } catch (err: any) {
+      setAppFeedback({ type: 'error', message: err.message || 'Network error during multi-app sync' });
+    } finally {
+      setSyncAllAppsLoading(false);
+    }
+  };
+
+  // Connect new SaaS app
+  const handleConnectApp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAppName.trim() || !newAppCode.trim() || !newAppBaseUrl.trim()) return;
+    try {
+      const activeAuth = token ? `Bearer ${token}` : `Bearer ${apiKey}`;
+      const res = await fetch('/v1/connected-apps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: activeAuth },
+        body: JSON.stringify({
+          app_code: newAppCode.trim().toLowerCase(),
+          app_name: newAppName.trim(),
+          base_url: newAppBaseUrl.trim(),
+          sync_endpoint: newAppSyncEndpoint.trim() || '/api/super-admin/receiving-accounts',
+          api_key: newAppApiKey.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setConnectAppModal(false);
+        setAppFeedback({
+          type: 'success',
+          message: `Application "${newAppName}" connected successfully! Now syncing bank accounts...`,
+        });
+        setNewAppName('');
+        setNewAppCode('');
+        setNewAppBaseUrl('');
+        setNewAppApiKey('');
+        // Trigger auto-sync for newly connected app
+        await handleSyncApp(data.app.id, data.app.app_name);
+      } else {
+        alert(data.message || 'Failed to connect SaaS application');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error connecting SaaS application');
+    }
+  };
+
+  // Disconnect app and clean up its synced accounts
+  const handleDisconnectApp = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to disconnect ${name}? All its synced bank methods in Payment Method Configuration will also be removed.`)) {
+      return;
+    }
+    try {
+      const activeAuth = token ? `Bearer ${token}` : `Bearer ${apiKey}`;
+      const res = await fetch(`/v1/connected-apps/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: activeAuth },
+      });
+      if (res.ok) {
+        setAppFeedback({
+          type: 'info',
+          message: `Disconnected ${name} and cleaned up its bank payment methods.`,
+        });
+        await fetchData();
+      } else {
+        const err = await res.json();
+        alert(err.message || 'Failed to disconnect app');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error disconnecting app');
+    }
+  };
+
+  // Filtered payment methods by source SaaS app
+  const filteredPaymentMethods = paymentMethods.filter(m => {
+    if (appFilter === 'all') return true;
+    if (appFilter === 'direct') return !m.source_app_code;
+    return m.source_app_code === appFilter;
+  });
 
   // Metrics
   const totalVolumePaisa = payments
@@ -1811,11 +1993,114 @@ export default function App() {
           {/* 6. PAYMENT METHODS */}
           {activeTab === 'payment-methods' && (
             <div>
+              {/* Multi-App Automated Bank Sync Banner */}
+              <div className="card" style={{
+                marginBottom: '1.25rem',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(14, 165, 233, 0.08))',
+                border: '1px solid rgba(99, 102, 241, 0.25)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                    <div style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 10,
+                      background: 'linear-gradient(135deg, #6366f1, #0ea5e9)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff',
+                      boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)'
+                    }}>
+                      <Layers size={22} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '1rem', color: '#fff' }}>
+                        Central Multi-App Gateway: Automated Bank Sync
+                      </div>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                        Bank receiving accounts (JazzCash, EasyPaisa, SadaPay, Bank AL Habib) are automatically fetched from connected SaaS apps (e.g. TPMS). No manual typing required.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      disabled={syncAllAppsLoading}
+                      onClick={handleSyncAllApps}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                    >
+                      <RefreshCw size={14} className={syncAllAppsLoading ? 'spin' : ''} />
+                      {syncAllAppsLoading ? 'Syncing...' : 'Sync All Accounts'}
+                    </button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setActiveTab('merchant-settings')}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                    >
+                      <Settings2 size={14} />
+                      Manage SaaS Apps ({connectedApps.length})
+                    </button>
+                  </div>
+                </div>
+
+                {appFeedback && (
+                  <div className={`sync-feedback-banner ${appFeedback.type}`} style={{ marginTop: '0.85rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {appFeedback.type === 'success' && <CheckCircle2 size={16} />}
+                      {appFeedback.type === 'error' && <AlertTriangle size={16} />}
+                      {appFeedback.type === 'info' && <RefreshCw size={16} />}
+                      <span>{appFeedback.message}</span>
+                    </div>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setAppFeedback(null)}>✕</button>
+                  </div>
+                )}
+              </div>
+
+              {/* Filter Pills */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginRight: '0.25rem' }}>
+                  <Filter size={14} /> Filter by App:
+                </span>
+                <button
+                  className={`btn btn-sm ${appFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setAppFilter('all')}
+                  style={{ fontSize: '0.78rem', padding: '0.25rem 0.65rem' }}
+                >
+                  All Accounts ({paymentMethods.length})
+                </button>
+                {connectedApps.map(app => {
+                  const count = paymentMethods.filter(m => m.source_app_code === app.app_code).length;
+                  return (
+                    <button
+                      key={app.id}
+                      className={`btn btn-sm ${appFilter === app.app_code ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setAppFilter(app.app_code)}
+                      style={{ fontSize: '0.78rem', padding: '0.25rem 0.65rem' }}
+                    >
+                      {app.app_name} ({count})
+                    </button>
+                  );
+                })}
+                {paymentMethods.some(m => !m.source_app_code) && (
+                  <button
+                    className={`btn btn-sm ${appFilter === 'direct' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setAppFilter('direct')}
+                    style={{ fontSize: '0.78rem', padding: '0.25rem 0.65rem' }}
+                  >
+                    Direct Gateway ({paymentMethods.filter(m => !m.source_app_code).length})
+                  </button>
+                )}
+              </div>
+
               <div className="card">
                 <div className="card-header">
                   <div className="card-title">Configured Payment Methods</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    All recipient account details are configured securely here.
+                    Showing {filteredPaymentMethods.length} of {paymentMethods.length} recipient accounts
                   </div>
                 </div>
 
@@ -1824,6 +2109,7 @@ export default function App() {
                     <thead>
                       <tr>
                         <th>Method</th>
+                        <th>Source SaaS App</th>
                         <th>Account Title</th>
                         <th>Account / Mobile / IBAN</th>
                         <th>Limits</th>
@@ -1832,11 +2118,20 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {paymentMethods.map(m => (
+                      {filteredPaymentMethods.map(m => (
                         <tr key={m.id}>
                           <td>
                             <strong>{m.name}</strong>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Code: {m.code}</div>
+                          </td>
+                          <td>
+                            {m.source_app_code === 'tpms' ? (
+                              <span className="app-source-badge tpms">TPMS TailorShop</span>
+                            ) : m.source_app_code ? (
+                              <span className="app-source-badge custom">{m.source_app_code.toUpperCase()}</span>
+                            ) : (
+                              <span className="app-source-badge direct">Direct Gateway</span>
+                            )}
                           </td>
                           <td>{m.account_title}</td>
                           <td><span className="code-pill">{m.account_identifier}</span></td>
@@ -1853,6 +2148,13 @@ export default function App() {
                           </td>
                         </tr>
                       ))}
+                      {filteredPaymentMethods.length === 0 && (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                            No payment methods found for this filter. Click <strong>"Sync All Accounts"</strong> above or connect a SaaS application in Merchant Settings.
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -2144,6 +2446,129 @@ export default function App() {
                     <button className="btn btn-secondary btn-sm" onClick={() => setSyncFeedback(null)}>✕</button>
                   </div>
                 )}
+              </div>
+
+              {/* CONNECTED SAAS APPLICATIONS (MULTI-APP MANAGER) */}
+              <div className="card" style={{ gridColumn: 'span 2' }}>
+                <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  <div>
+                    <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Layers size={20} style={{ color: '#3b82f6' }} />
+                      Connected SaaS Applications (Multi-App Manager)
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                      Connect your SaaS products (TPMS, etc.) to automatically fetch & sync bank receiving accounts into Payment Method Configuration.
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleSyncAllApps}
+                      disabled={syncAllAppsLoading || connectedApps.length === 0}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                    >
+                      <RefreshCw size={14} className={syncAllAppsLoading ? 'spin' : ''} />
+                      {syncAllAppsLoading ? 'Syncing All...' : 'Sync All Accounts'}
+                    </button>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => {
+                        handleQuickFillTPMS();
+                        setConnectAppModal(true);
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                    >
+                      <Plus size={15} />
+                      Connect SaaS App
+                    </button>
+                  </div>
+                </div>
+
+                {/* Apps Grid */}
+                <div className="connected-apps-grid">
+                  {connectedApps.map(app => (
+                    <div key={app.id} className="connected-app-card">
+                      <div>
+                        <div className="app-card-header">
+                          <div className="app-title-group">
+                            <div className="app-icon-box">
+                              <Server size={20} />
+                            </div>
+                            <div>
+                              <div className="app-title-text">{app.app_name}</div>
+                              <span className="app-code-tag">{app.app_code.toUpperCase()}</span>
+                            </div>
+                          </div>
+                          <span className={`badge ${app.sync_status === 'synced' ? 'badge-verified' : app.sync_status === 'failed' ? 'badge-rejected' : 'badge-awaiting'}`}>
+                            {app.sync_status === 'synced' ? '🟢 Synced' : app.sync_status === 'failed' ? '🔴 Sync Error' : '⚪ Never Synced'}
+                          </span>
+                        </div>
+
+                        <div className="app-meta-box">
+                          <div className="app-meta-row">
+                            <span className="app-meta-label">Base URL:</span>
+                            <span className="app-meta-val" style={{ fontFamily: 'var(--font-mono)' }}>{app.base_url}</span>
+                          </div>
+                          <div className="app-meta-row">
+                            <span className="app-meta-label">Sync Endpoint:</span>
+                            <span className="app-meta-val" style={{ fontFamily: 'var(--font-mono)', color: '#93c5fd' }}>{app.sync_endpoint}</span>
+                          </div>
+                          <div className="app-meta-row">
+                            <span className="app-meta-label">Synced Accounts:</span>
+                            <span className="app-meta-val" style={{ color: '#34d399', fontWeight: 700 }}>
+                              {app.methods_count} Accounts Active
+                            </span>
+                          </div>
+                          <div className="app-meta-row">
+                            <span className="app-meta-label">Last Synced:</span>
+                            <span className="app-meta-val">
+                              {app.last_synced_at ? new Date(app.last_synced_at).toLocaleString() : 'Not synced yet'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+                          disabled={syncingAppId === app.id}
+                          onClick={() => handleSyncApp(app.id, app.app_name)}
+                        >
+                          <Download size={14} className={syncingAppId === app.id ? 'spin' : ''} />
+                          {syncingAppId === app.id ? 'Fetching Accounts...' : 'Fetch & Sync Bank Details'}
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          style={{ color: '#ef4444' }}
+                          title="Disconnect application"
+                          onClick={() => handleDisconnectApp(app.id, app.app_name)}
+                        >
+                          <Unlink size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {connectedApps.length === 0 && (
+                    <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '2rem 1rem', background: 'rgba(255,255,255,0.02)', borderRadius: 10, border: '1px dashed rgba(255,255,255,0.1)' }}>
+                      <Layers size={32} style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }} />
+                      <div style={{ fontWeight: 600 }}>No Connected SaaS Applications</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem', marginBottom: '1rem' }}>
+                        Connect your SaaS app (e.g. TailorShop TPMS) to automatically import your receiving bank accounts.
+                      </div>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => {
+                          handleQuickFillTPMS();
+                          setConnectAppModal(true);
+                        }}
+                      >
+                        <Plus size={14} /> Connect TPMS Now
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="card">
@@ -3044,6 +3469,112 @@ export default function App() {
             <div className="modal-footer">
               <button className="btn btn-primary" onClick={() => setViewPaymentModal(null)}>Close</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CONNECT NEW SAAS APP */}
+      {connectAppModal && (
+        <div className="modal-overlay">
+          <div className="modal-dialog">
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Layers size={20} style={{ color: '#3b82f6' }} />
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Connect SaaS Application</h3>
+              </div>
+              <button className="btn btn-secondary btn-sm" onClick={() => setConnectAppModal(false)}>✕</button>
+            </div>
+            <form onSubmit={handleConnectApp}>
+              <div className="modal-body">
+                {/* Quick Preset Banner */}
+                <div style={{
+                  background: 'rgba(99, 102, 241, 0.12)',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  borderRadius: 8,
+                  padding: '0.75rem 1rem',
+                  marginBottom: '1rem',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#c7d2fe' }}>Quick Preset Available</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Pre-fill details for TailorShop Management System</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleQuickFillTPMS}
+                    style={{ fontSize: '0.75rem' }}
+                  >
+                    ⚡ Fill TPMS Preset
+                  </button>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Application Name *</label>
+                  <input
+                    className="form-input"
+                    placeholder="e.g. TailorShop Management System (TPMS)"
+                    value={newAppName}
+                    onChange={e => setNewAppName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Application Identifier Code *</label>
+                  <input
+                    className="form-input"
+                    placeholder="e.g. tpms (lowercase, alphanumeric, underscores)"
+                    value={newAppCode}
+                    onChange={e => setNewAppCode(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
+                    required
+                  />
+                  <div className="form-help">Unique short code used to tag payment methods and webhook callbacks.</div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Base URL *</label>
+                  <input
+                    className="form-input"
+                    placeholder="e.g. http://localhost:3000 or https://tpms.sysgalaxy.com"
+                    value={newAppBaseUrl}
+                    onChange={e => setNewAppBaseUrl(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Bank Accounts Sync Endpoint *</label>
+                  <input
+                    className="form-input"
+                    placeholder="/api/super-admin/receiving-accounts"
+                    value={newAppSyncEndpoint}
+                    onChange={e => setNewAppSyncEndpoint(e.target.value)}
+                    required
+                  />
+                  <div className="form-help">The API route on the SaaS app providing receiving bank account details.</div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">API Key / Shared Secret (Optional)</label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    placeholder="Optional Bearer token or secret"
+                    value={newAppApiKey}
+                    onChange={e => setNewAppApiKey(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setConnectAppModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Plus size={16} /> Connect & Sync Accounts
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

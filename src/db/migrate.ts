@@ -42,6 +42,23 @@ export async function runMigrations(): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS connected_apps (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      app_code TEXT NOT NULL,
+      base_url TEXT NOT NULL,
+      sync_endpoint TEXT NOT NULL DEFAULT '/api/super-admin/receiving-accounts',
+      api_key TEXT,
+      description TEXT,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      last_synced_at TIMESTAMPTZ,
+      synced_methods_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT uq_tenant_connected_app_code UNIQUE (tenant_id, app_code)
+    );
+
     CREATE TABLE IF NOT EXISTS payment_methods (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -54,10 +71,15 @@ export async function runMigrations(): Promise<void> {
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       min_amount_paisa BIGINT NOT NULL DEFAULT 100,
       max_amount_paisa BIGINT NOT NULL DEFAULT 100000000,
+      source_app_code TEXT NOT NULL DEFAULT 'direct',
+      source_app_id UUID,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CONSTRAINT uq_tenant_payment_method UNIQUE (tenant_id, code)
     );
+
+    ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS source_app_code TEXT NOT NULL DEFAULT 'direct';
+    ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS source_app_id UUID;
 
     CREATE TABLE IF NOT EXISTS payment_requests (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -356,6 +378,21 @@ export async function seedInitialData(): Promise<{
       (${tenantId}, 'notifications@easypaisa.com.pk', 'Easypaisa Payment Alerts', 'easypaisa', TRUE),
       (${tenantId}, 'no-reply@jazzcash.com.pk', 'JazzCash Transaction Notifications', 'jazzcash', TRUE)
     ON CONFLICT (tenant_id, sender_email) DO NOTHING;
+  `);
+
+  // Seed default connected app for TPMS
+  await db.execute(sql`
+    INSERT INTO connected_apps (tenant_id, name, app_code, base_url, sync_endpoint, description, is_active)
+    VALUES (
+      ${tenantId},
+      'TailorShop Management System (TPMS)',
+      'tpms',
+      'http://localhost:5173',
+      '/api/super-admin/receiving-accounts',
+      'Primary connected tailoring and order management SaaS product',
+      TRUE
+    )
+    ON CONFLICT (tenant_id, app_code) DO NOTHING;
   `);
 
   return {

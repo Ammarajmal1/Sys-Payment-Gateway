@@ -51,6 +51,27 @@ export const apiKeys = pgTable('api_keys', {
 ]);
 
 // -----------------------------------------------------------------------------
+// 3b. Connected SaaS Applications (Multi-App Manager)
+// -----------------------------------------------------------------------------
+export const connectedApps = pgTable('connected_apps', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  appCode: text('app_code').notNull(),
+  baseUrl: text('base_url').notNull(),
+  syncEndpoint: text('sync_endpoint').notNull().default('/api/super-admin/receiving-accounts'),
+  apiKey: text('api_key'),
+  description: text('description'),
+  isActive: boolean('is_active').notNull().default(true),
+  lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+  syncedMethodsCount: integer('synced_methods_count').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex('connected_apps_tenant_code_idx').on(table.tenantId, table.appCode),
+]);
+
+// -----------------------------------------------------------------------------
 // 4. Payment Methods (Configured per tenant: Easypaisa, JazzCash, Bank)
 // -----------------------------------------------------------------------------
 export const paymentMethods = pgTable('payment_methods', {
@@ -65,6 +86,8 @@ export const paymentMethods = pgTable('payment_methods', {
   isActive: boolean('is_active').notNull().default(true),
   minAmountPaisa: bigint('min_amount_paisa', { mode: 'number' }).notNull().default(100),
   maxAmountPaisa: bigint('max_amount_paisa', { mode: 'number' }).notNull().default(100000000),
+  sourceAppCode: text('source_app_code').notNull().default('direct'),
+  sourceAppId: uuid('source_app_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
