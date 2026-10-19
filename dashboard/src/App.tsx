@@ -1272,9 +1272,15 @@ export default function App() {
                   handleLogout();
                 }}
                 title="Sign Out of Gateway"
+                style={{
+                  padding: '0.32rem',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
                 <LogOut size={13} />
-                Sign Out
               </button>
             </div>
           )}
