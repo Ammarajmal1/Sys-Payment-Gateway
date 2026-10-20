@@ -1,11 +1,29 @@
 import 'dotenv/config';
+import fs from 'node:fs';
+import path from 'node:path';
+import { exec } from 'node:child_process';
 import { buildApp } from './app.js';
 import { runMigrations, seedInitialData } from './db/migrate.js';
 import { closeDb } from './db/index.js';
 import { GmailBankAlertPoller } from './modules/bank-feeds/gmail-poller.js';
 
-const PORT = parseInt(process.env.PORT || '3000', 10);
-const HOST = process.env.HOST || '0.0.0.0';
+function getArg(flag: string): string | undefined {
+  const idx = process.argv.indexOf(flag);
+  return idx !== -1 && idx < process.argv.length - 1 ? process.argv[idx + 1] : undefined;
+}
+
+const PORT = parseInt(getArg('--port') || process.env.PORT || '3000', 10);
+const HOST = getArg('--host') || process.env.HOST || '0.0.0.0';
+
+// Trigger background dashboard build if dist index.html is missing
+const distIndex = path.resolve(process.cwd(), 'dashboard', 'dist', 'index.html');
+if (!fs.existsSync(distIndex)) {
+  console.log('⚡ Dashboard dist not found, compiling in background...');
+  exec('npm run build:dashboard', (err, stdout) => {
+    if (err) console.error('Dashboard build error:', err);
+    else console.log('✅ Dashboard built successfully.');
+  });
+}
 
 async function main() {
   console.log('🚀 Initializing SysGalaxy Payment Verification Gateway...');

@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build:dashboard": "vite build --config dashboard/vite.config.ts",
-    "dev": "test -f dashboard/dist/index.html || npm run build:dashboard; tsx src/index.ts",
+    "dev": "tsx src/index.ts",
     "build": "tsc && npm run build:dashboard",
     "start": "node dist/src/index.js",
     "test": "vitest run",

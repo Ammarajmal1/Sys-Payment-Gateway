@@ -238,6 +238,7 @@ export default function App() {
   const [newSenderEmail, setNewSenderEmail] = useState('');
   const [newSenderName, setNewSenderName] = useState('');
   const [newSenderProvider, setNewSenderProvider] = useState('bank_transfer');
+  const [addSenderModal, setAddSenderModal] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
 
   // Bank Email Feeds & Gmail Live Status State
@@ -754,6 +755,7 @@ export default function App() {
       if (res.ok) {
         setNewSenderEmail('');
         setNewSenderName('');
+        setAddSenderModal(false);
         alert('Trusted Bank Sender Email added to whitelist!');
         fetchData();
       } else {
@@ -1307,7 +1309,20 @@ export default function App() {
             </h1>
           </div>
 
-          <div className="header-actions">
+          <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            {activeTab === 'senders-whitelist' && (
+              <button
+                id="btn-header-add-email"
+                className="btn btn-primary btn-sm"
+                onClick={() => setAddSenderModal(true)}
+                title="Add New Sender Email"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <Plus size={15} />
+                Add Email
+              </button>
+            )}
+
             <button
               id="btn-refresh-data"
               className="btn btn-secondary btn-sm"
@@ -1915,7 +1930,14 @@ export default function App() {
                     <div style={{ padding: '2.5rem 1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                       <ShieldCheck size={36} style={{ margin: '0 auto 0.75rem', opacity: 0.3 }} />
                       <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#fff' }}>No whitelisted bank senders configured</div>
-                      <p style={{ fontSize: '0.8rem', marginTop: 4 }}>Add your official bank email addresses below to start receiving automated alerts.</p>
+                      <p style={{ fontSize: '0.8rem', marginTop: 4 }}>Add your official bank email addresses to start receiving automated alerts.</p>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => setAddSenderModal(true)}
+                        style={{ marginTop: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                      >
+                        <Plus size={14} /> Add Email
+                      </button>
                     </div>
                   ) : (
                     <table className="data-table">
@@ -1956,65 +1978,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Add New Trusted Bank Sender Card */}
-              <div className="card">
-                <div className="card-header">
-                  <div className="card-title">
-                    <Plus size={18} style={{ color: '#10b981' }} />
-                    Add New Trusted Bank Sender Address
-                  </div>
-                </div>
-
-                <form onSubmit={handleAddSender} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Official Bank Sender Email *</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. alerts@meezanbank.com or @jazzcash.com.pk"
-                        value={newSenderEmail}
-                        onChange={e => setNewSenderEmail(e.target.value)}
-                        required
-                      />
-                      <div className="form-help">Exact email or domain wildcard (e.g. @meezanbank.com)</div>
-                    </div>
-
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Bank Institution Name *</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. Meezan Bank Official Alerts"
-                        value={newSenderName}
-                        onChange={e => setNewSenderName(e.target.value)}
-                        required
-                      />
-                    </div>
-
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Provider Channel</label>
-                      <select
-                        className="form-select"
-                        value={newSenderProvider}
-                        onChange={e => setNewSenderProvider(e.target.value)}
-                      >
-                        <option value="meezan_bank">Meezan Bank</option>
-                        <option value="jazzcash">JazzCash</option>
-                        <option value="easypaisa">Easypaisa</option>
-                        <option value="hbl">HBL</option>
-                        <option value="bank_transfer">Standard Bank</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '0.5rem' }}>
-                    <button type="submit" className="btn btn-primary">
-                      <Plus size={16} /> Add to Whitelist
-                    </button>
-                  </div>
-                </form>
-              </div>
             </div>
           )}
 
@@ -2379,105 +2342,9 @@ export default function App() {
 
           {/* 10. MERCHANT SETTINGS */}
           {activeTab === 'merchant-settings' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-              {/* GMAIL BANK FEED INTEGRATION & INBOX STATUS CARD */}
-              <div style={{ gridColumn: 'span 2' }}>
-                <div className={`gmail-status-card ${!gmailStatus?.configured ? 'disconnected' : gmailStatus?.lastError ? 'attention' : ''}`}>
-                  <div className="gmail-status-header">
-                    <div className="gmail-status-indicator-group">
-                      <div className={`status-pulse-dot ${syncingGmail || gmailStatus?.isRunning ? 'syncing' : (gmailStatus?.configured && gmailStatus?.enabled) ? 'online' : gmailStatus?.lastError ? 'error' : 'offline'}`} />
-                      <div>
-                        <div className="gmail-status-title">
-                          {syncingGmail || gmailStatus?.isRunning ? (
-                            <>Gmail Status: Checking INBOX 🔄 <span style={{ fontSize: '0.8rem', fontWeight: 500, color: '#93c5fd' }}>(Syncing Bank Alerts...)</span></>
-                          ) : (gmailStatus?.configured && gmailStatus?.enabled) ? (
-                            <>Gmail Status: Connected 🟢 (Pub/Sub Push Active)</>
-                          ) : gmailStatus?.lastError ? (
-                            <>Gmail Status: Attention Required ⚠️</>
-                          ) : (
-                            <>Gmail Status: Not Configured ⚪</>
-                          )}
-                        </div>
-                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                          {gmailStatus?.pubsubActive ? (
-                            <>Automated Real-Time Push Webhook is active via Google Cloud Pub/Sub (<span style={{ fontFamily: 'var(--font-mono)', color: '#a5b4fc' }}>/v1/bank-feeds/gmail/pubsub-webhook</span>)</>
-                          ) : (
-                            <>Real-time IMAP Polling & Google Cloud Pub/Sub Webhooks</>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      className="btn btn-primary btn-sm"
-                      onClick={handleSyncGmailNow}
-                      disabled={syncingGmail}
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                    >
-                      <RotateCw size={14} className={syncingGmail ? 'spin' : ''} />
-                      {syncingGmail ? 'Checking INBOX...' : 'Check Mail Now'}
-                    </button>
-                  </div>
-
-                  <div className="gmail-status-meta-grid">
-                    <div className="gmail-meta-item">
-                      <div className="gmail-meta-label">Ingestion Mode</div>
-                      <div className="gmail-meta-value">
-                        <Radio size={13} style={{ color: '#10b981' }} />
-                        Pub/Sub Push + IMAP
-                      </div>
-                    </div>
-
-                    <div className="gmail-meta-item">
-                      <div className="gmail-meta-label">Connected Account</div>
-                      <div className="gmail-meta-value" style={{ fontFamily: 'var(--font-mono)' }}>
-                        <Lock size={12} style={{ color: '#6366f1' }} />
-                        {gmailStatus?.gmailUser || 'Encrypted / Protected'}
-                      </div>
-                    </div>
-
-                    <div className="gmail-meta-item">
-                      <div className="gmail-meta-label">Last Successful Sync</div>
-                      <div className="gmail-meta-value">
-                        <Clock size={13} style={{ color: '#0ea5e9' }} />
-                        {gmailStatus?.lastSuccessAt ? new Date(gmailStatus.lastSuccessAt).toLocaleTimeString() : 'Real-time (Active)'}
-                      </div>
-                    </div>
-
-                    <div className="gmail-meta-item">
-                      <div className="gmail-meta-label">Total Ingested Feeds</div>
-                      <div className="gmail-meta-value">
-                        <Inbox size={13} style={{ color: '#a855f7' }} />
-                        {bankFeeds.length} Alerts
-                      </div>
-                    </div>
-
-                    <div className="gmail-meta-item">
-                      <div className="gmail-meta-label">Auto-Verified Orders</div>
-                      <div className="gmail-meta-value" style={{ color: '#34d399' }}>
-                        <CheckCircle2 size={13} style={{ color: '#10b981' }} />
-                        {bankFeeds.filter(f => f.payment_id || f.order_reference).length} Orders
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sync Feedback Banner */}
-                {syncFeedback && (
-                  <div className={`sync-feedback-banner ${syncFeedback.type}`} style={{ marginTop: '0.85rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      {syncFeedback.type === 'success' && <CheckCircle2 size={16} />}
-                      {syncFeedback.type === 'error' && <AlertTriangle size={16} />}
-                      {syncFeedback.type === 'info' && <RefreshCw size={16} />}
-                      <span>{syncFeedback.message}</span>
-                    </div>
-                    <button className="btn btn-secondary btn-sm" onClick={() => setSyncFeedback(null)}>✕</button>
-                  </div>
-                )}
-              </div>
-
+            <div>
               {/* CONNECTED SAAS APPLICATIONS (MULTI-APP MANAGER) */}
-              <div className="card" style={{ gridColumn: 'span 2' }}>
+              <div className="card">
                 <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
                   <div>
                     <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -2599,138 +2466,6 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="card">
-                <div className="card-header">
-                  <div className="card-title">Merchant Tenant Profile</div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Merchant Name</label>
-                  <input className="form-input" value="Tailor OS Merchant" readOnly />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Tenant Slug</label>
-                  <input className="form-input" value="tailor-os-demo" readOnly />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Account Currency</label>
-                  <input className="form-input" value="PKR (Pakistani Rupee)" readOnly />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Active API Key for Dashboard</label>
-                  <input className="form-input" value={apiKey} onChange={e => setApiKey(e.target.value)} />
-                  <div className="form-help">Enter your live or test secret API key to authenticate requests.</div>
-                </div>
-              </div>
-
-              <div className="card">
-                <div className="card-header">
-                  <div className="card-title">System & Storage Status</div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">OCR Engine</label>
-                  <input className="form-input" value="Tesseract.js (Self-Hosted, No External LLM)" readOnly />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Storage Adapter</label>
-                  <input className="form-input" value="Local Disk Adapter (Private / Non-Public)" readOnly />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Webhook Security</label>
-                  <input className="form-input" value="HMAC-SHA256 with Replay Window Tolerance (300s)" readOnly />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Amount Storage Mode</label>
-                  <input className="form-input" value="Integer Paisa Representation (1 PKR = 100 Paisa)" readOnly />
-                </div>
-              </div>
-
-              {/* Trusted Bank Email Whitelist Card */}
-              <div className="card" style={{ gridColumn: 'span 2' }}>
-                <div className="card-header">
-                  <div>
-                    <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <ShieldCheck size={20} style={{ color: '#3b82f6' }} />
-                      Trusted Bank Sender Emails (Whitelist)
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                      Only transaction alert emails from these configured addresses will be accepted for automated verification. All other emails will be ignored and discarded.
-                    </div>
-                  </div>
-                </div>
-
-                <form onSubmit={handleAddSender} style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-                  <input
-                    type="email"
-                    placeholder="e.g. alerts@meezanbank.com"
-                    className="form-input"
-                    style={{ flex: '1 1 220px' }}
-                    value={newSenderEmail}
-                    onChange={e => setNewSenderEmail(e.target.value)}
-                    required
-                  />
-                  <input
-                    type="text"
-                    placeholder="Bank / Sender Label"
-                    className="form-input"
-                    style={{ flex: '1 1 180px' }}
-                    value={newSenderName}
-                    onChange={e => setNewSenderName(e.target.value)}
-                  />
-                  <select
-                    className="form-select"
-                    style={{ flex: '0 1 160px' }}
-                    value={newSenderProvider}
-                    onChange={e => setNewSenderProvider(e.target.value)}
-                  >
-                    <option value="bank_transfer">Bank Transfer / Raast</option>
-                    <option value="easypaisa">Easypaisa</option>
-                    <option value="jazzcash">JazzCash</option>
-                  </select>
-                  <button type="submit" className="btn btn-primary" style={{ flex: '0 0 auto' }}>
-                    <Plus size={16} /> Add Whitelist Email
-                  </button>
-                </form>
-
-                <div className="table-container">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Allowed Sender Email</th>
-                        <th>Institution / Label</th>
-                        <th>Provider</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {trustedSenders.map(s => (
-                        <tr key={s.id}>
-                          <td><span className="code-pill" style={{ color: '#60a5fa', fontWeight: 600 }}>{s.sender_email}</span></td>
-                          <td>{s.sender_name}</td>
-                          <td style={{ textTransform: 'capitalize' }}>{s.provider_code.replace('_', ' ')}</td>
-                          <td><span className="badge badge-verified"><CheckCircle2 size={12} /> Active Whitelist</span></td>
-                          <td>
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              style={{ color: '#ef4444' }}
-                              onClick={() => handleDeleteSender(s.id)}
-                            >
-                              <XCircle size={14} /> Remove
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                      {trustedSenders.length === 0 && (
-                        <tr>
-                          <td colSpan={5} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
-                            No trusted sender emails configured yet. Add your bank alert email above.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
             </div>
           )}
 
@@ -2779,13 +2514,111 @@ export default function App() {
 
           {/* 12. PROFILE */}
           {activeTab === 'profile' && (
-            <div className="card" style={{ maxWidth: '640px' }}>
-              <div className="card-header">
-                <div className="card-title">
-                  <User size={18} style={{ color: '#60a5fa' }} />
-                  User Profile & Session
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '850px' }}>
+              {/* GMAIL BANK FEED INTEGRATION & INBOX STATUS CARD (MOVED TO PROFILE) */}
+              <div>
+                <div className={`gmail-status-card ${!gmailStatus?.configured ? 'disconnected' : gmailStatus?.lastError ? 'attention' : ''}`}>
+                  <div className="gmail-status-header">
+                    <div className="gmail-status-indicator-group">
+                      <div className={`status-pulse-dot ${syncingGmail || gmailStatus?.isRunning ? 'syncing' : (gmailStatus?.configured && gmailStatus?.enabled) ? 'online' : gmailStatus?.lastError ? 'error' : 'offline'}`} />
+                      <div>
+                        <div className="gmail-status-title">
+                          {syncingGmail || gmailStatus?.isRunning ? (
+                            <>Gmail Status: Checking INBOX 🔄 <span style={{ fontSize: '0.8rem', fontWeight: 500, color: '#93c5fd' }}>(Syncing Bank Alerts...)</span></>
+                          ) : (gmailStatus?.configured && gmailStatus?.enabled) ? (
+                            <>Gmail Status: Connected 🟢 (Pub/Sub Push Active)</>
+                          ) : gmailStatus?.lastError ? (
+                            <>Gmail Status: Attention Required ⚠️</>
+                          ) : (
+                            <>Gmail Status: Not Configured ⚪</>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                          {gmailStatus?.pubsubActive ? (
+                            <>Automated Real-Time Push Webhook is active via Google Cloud Pub/Sub (<span style={{ fontFamily: 'var(--font-mono)', color: '#a5b4fc' }}>/v1/bank-feeds/gmail/pubsub-webhook</span>)</>
+                          ) : (
+                            <>Real-time IMAP Polling & Google Cloud Pub/Sub Webhooks</>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={handleSyncGmailNow}
+                      disabled={syncingGmail}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                    >
+                      <RotateCw size={14} className={syncingGmail ? 'spin' : ''} />
+                      {syncingGmail ? 'Checking INBOX...' : 'Check Mail Now'}
+                    </button>
+                  </div>
+
+                  <div className="gmail-status-meta-grid">
+                    <div className="gmail-meta-item">
+                      <div className="gmail-meta-label">Ingestion Mode</div>
+                      <div className="gmail-meta-value">
+                        <Radio size={13} style={{ color: '#10b981' }} />
+                        Pub/Sub Push + IMAP
+                      </div>
+                    </div>
+
+                    <div className="gmail-meta-item">
+                      <div className="gmail-meta-label">Connected Account</div>
+                      <div className="gmail-meta-value" style={{ fontFamily: 'var(--font-mono)' }}>
+                        <Lock size={12} style={{ color: '#6366f1' }} />
+                        {gmailStatus?.gmailUser || 'Encrypted / Protected'}
+                      </div>
+                    </div>
+
+                    <div className="gmail-meta-item">
+                      <div className="gmail-meta-label">Last Successful Sync</div>
+                      <div className="gmail-meta-value">
+                        <Clock size={13} style={{ color: '#0ea5e9' }} />
+                        {gmailStatus?.lastSuccessAt ? new Date(gmailStatus.lastSuccessAt).toLocaleTimeString() : 'Real-time (Active)'}
+                      </div>
+                    </div>
+
+                    <div className="gmail-meta-item">
+                      <div className="gmail-meta-label">Total Ingested Feeds</div>
+                      <div className="gmail-meta-value">
+                        <Inbox size={13} style={{ color: '#a855f7' }} />
+                        {bankFeeds.length} Alerts
+                      </div>
+                    </div>
+
+                    <div className="gmail-meta-item">
+                      <div className="gmail-meta-label">Auto-Verified Orders</div>
+                      <div className="gmail-meta-value" style={{ color: '#34d399' }}>
+                        <CheckCircle2 size={13} style={{ color: '#10b981' }} />
+                        {bankFeeds.filter(f => f.payment_id || f.order_reference).length} Orders
+                      </div>
+                    </div>
+                  </div>
                 </div>
+
+                {/* Sync Feedback Banner */}
+                {syncFeedback && (
+                  <div className={`sync-feedback-banner ${syncFeedback.type}`} style={{ marginTop: '0.85rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {syncFeedback.type === 'success' && <CheckCircle2 size={16} />}
+                      {syncFeedback.type === 'error' && <AlertTriangle size={16} />}
+                      {syncFeedback.type === 'info' && <RefreshCw size={16} />}
+                      <span>{syncFeedback.message}</span>
+                    </div>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setSyncFeedback(null)}>✕</button>
+                  </div>
+                )}
               </div>
+
+              {/* User Profile & Session */}
+              <div className="card">
+                <div className="card-header">
+                  <div className="card-title">
+                    <User size={18} style={{ color: '#60a5fa' }} />
+                    User Profile & Session
+                  </div>
+                </div>
 
               <div
                 style={{
@@ -2981,6 +2814,7 @@ export default function App() {
                   </div>
                 </form>
               </div>
+            </div>
             </div>
           )}
         </div>
@@ -3601,6 +3435,77 @@ export default function App() {
                 <button type="submit" className="btn btn-primary" disabled={isConnectingApp} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <Plus size={16} className={isConnectingApp ? 'spin' : ''} />
                   {isConnectingApp ? 'Connecting & Syncing...' : 'Connect & Sync Accounts'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD SENDER EMAIL */}
+      {addSenderModal && (
+        <div className="modal-overlay" onClick={() => setAddSenderModal(false)}>
+          <div className="modal-dialog" style={{ maxWidth: 540 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Plus size={18} style={{ color: '#10b981' }} /> Add New Trusted Bank Sender Email
+              </h3>
+              <button className="btn btn-secondary btn-sm" onClick={() => setAddSenderModal(false)}>✕</button>
+            </div>
+            <form onSubmit={handleAddSender}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Incoming bank alert emails from this address or domain will be whitelisted and processed automatically.
+                </p>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Official Bank Sender Email *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. alerts@meezanbank.com or @jazzcash.com.pk"
+                    value={newSenderEmail}
+                    onChange={e => setNewSenderEmail(e.target.value)}
+                    autoFocus
+                    required
+                  />
+                  <div className="form-help">Exact email address or domain wildcard (e.g. @meezanbank.com)</div>
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Bank Institution Name *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Meezan Bank Official Alerts"
+                    value={newSenderName}
+                    onChange={e => setNewSenderName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Provider Channel</label>
+                  <select
+                    className="form-select"
+                    value={newSenderProvider}
+                    onChange={e => setNewSenderProvider(e.target.value)}
+                  >
+                    <option value="meezan_bank">Meezan Bank</option>
+                    <option value="jazzcash">JazzCash</option>
+                    <option value="easypaisa">Easypaisa</option>
+                    <option value="hbl">HBL</option>
+                    <option value="bank_transfer">Standard Bank</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setAddSenderModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Plus size={15} /> Add Email
                 </button>
               </div>
             </form>

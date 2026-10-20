@@ -120,6 +120,29 @@ export function buildApp(): FastifyInstance {
       }
     }
 
+    // If requesting frontend HTML and dist is not ready yet, serve a friendly 200 OK warmup page with auto-refresh
+    if (isReadMethod && (reqPath === '/' || !path.extname(reqPath))) {
+      reply.header('Content-Type', 'text/html; charset=utf-8').status(200).send(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>SysGalaxy — Loading</title>
+  <meta http-equiv="refresh" content="2">
+  <style>
+    body { background: #090d16; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .card { background: rgba(255,255,255,0.05); padding: 2rem 2.5rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2 style="margin: 0 0 0.5rem; color: #3b82f6;">SysGalaxy Payment Gateway</h2>
+    <p style="margin: 0; color: #94a3b8; font-size: 0.95rem;">Preparing interface, refreshing automatically...</p>
+  </div>
+</body>
+</html>`);
+      return;
+    }
+
     reply.status(404).send({
       statusCode: 404,
       error: 'Not Found',
