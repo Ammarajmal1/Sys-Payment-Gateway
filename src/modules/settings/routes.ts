@@ -41,6 +41,7 @@ const CreateWebhookEndpointSchema = z.object({
   url: z.string().url('A valid HTTPS or HTTP URL is required'),
   description: z.string().default(''),
   events: z.array(z.string()).default(['*']),
+  secret: z.string().optional(),
 });
 
 const CreateConnectedAppSchema = z
@@ -326,8 +327,8 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
       return;
     }
 
-    const { url, description, events } = parse.data;
-    const secret = `whsec_${crypto.randomBytes(24).toString('hex')}`;
+    const { url, description, events, secret: customSecret } = parse.data;
+    const secret = customSecret || `whsec_${crypto.randomBytes(24).toString('hex')}`;
     const id = crypto.randomUUID();
     const db = await getDb();
 
@@ -346,6 +347,18 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
       created_at: new Date().toISOString(),
       warning: 'Store this webhook secret securely. It is used to verify HMAC-SHA256 signatures.',
     });
+  });
+
+  fastify.delete('/v1/webhooks/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const tenant = request.tenant!;
+    const { id } = request.params;
+    const db = await getDb();
+
+    await db.execute(sql`
+      DELETE FROM webhook_endpoints WHERE id = ${id} AND tenant_id = ${tenant.id}
+    `);
+
+    reply.send({ success: true, message: 'Webhook endpoint deleted.' });
   });
 
   fastify.post('/v1/webhooks/:id/test', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
@@ -368,15 +381,26 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
     const testPayload = {
       id: eventId,
       eventType: 'webhook.ping',
+      event_type: 'webhook.ping',
       createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
       paymentRequestId: 'pr_test_ping_0000',
+      payment_request_id: 'pr_test_ping_0000',
       orderReference: 'TEST_ORDER_PING',
+      order_reference: 'TEST_ORDER_PING',
       amountPaisa: 10000,
+      amount_paisa: 10000,
       currency: 'PKR',
       status: 'verified',
       verificationMethod: 'provider_verified',
+      verification_method: 'provider_verified',
       data: { message: 'SysGalaxy Webhook Test Ping' },
     };
+
+    await db.execute(sql`
+      INSERT INTO webhook_events (id, tenant_id, event_type, payload, idempotency_key)
+      VALUES (${eventId}, ${tenant.id}, 'webhook.ping', ${JSON.stringify(testPayload)}::jsonb, ${`ping_${eventId}`})
+    `);
 
     const deliveryResult = await WebhookDispatcher.dispatchToEndpoint(
       eventId,
@@ -587,7 +611,7 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
       clearTimeout(timeout);
 
       if (resp.ok) {
-        const json = await resp.json();
+        const json: any = await resp.json();
         accounts = Array.isArray(json) ? json : Array.isArray(json?.items) ? json.items : Array.isArray(json?.data) ? json.data : [];
       } else {
         syncError = `Remote HTTP ${resp.status}: ${resp.statusText}`;

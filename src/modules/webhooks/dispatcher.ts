@@ -6,13 +6,20 @@ import { generateWebhookSignature } from '../../utils/crypto.js';
 export interface WebhookEventPayload {
   id: string;
   eventType: string;
+  event_type?: string;
   createdAt: string;
+  created_at?: string;
   paymentRequestId: string;
+  payment_request_id?: string;
   orderReference: string;
+  order_reference?: string;
   amountPaisa: number;
+  amount_paisa?: number;
   currency: string;
   status: string;
   verificationMethod: string | null;
+  verification_method?: string | null;
+  transaction_reference?: string | null;
   data: Record<string, unknown>;
 }
 
@@ -34,17 +41,26 @@ export class WebhookDispatcher {
     const db = await getDb();
     const eventId = crypto.randomUUID();
     const idempotencyKey = `evt_${eventType}_${paymentRequestId}_${Date.now()}`;
+    const nowIso = new Date().toISOString();
+    const trxRef = (extraData as any)?.transaction_reference || (extraData as any)?.transactionReference || null;
 
     const payload: WebhookEventPayload = {
       id: eventId,
       eventType,
-      createdAt: new Date().toISOString(),
+      event_type: eventType,
+      createdAt: nowIso,
+      created_at: nowIso,
       paymentRequestId,
+      payment_request_id: paymentRequestId,
       orderReference,
+      order_reference: orderReference,
       amountPaisa,
+      amount_paisa: amountPaisa,
       currency,
       status,
       verificationMethod,
+      verification_method: verificationMethod,
+      transaction_reference: trxRef,
       data: extraData,
     };
 
